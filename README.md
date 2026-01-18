@@ -1,6 +1,8 @@
 # Sliding Window Visualization
 
-An interactive visualization tool for understanding sliding window attention patterns across 1D, 2D, and 3D spaces. This tool helps you intuitively explore how tokens are distributed in 3D sparse attention mechanisms and design effective sparse attention patterns for your models.
+An interactive visualization tool for understanding sliding window attention patterns across 1D, 2D, and 3D spaces. 🔍
+
+**Why this tool?** While 1D sliding window is intuitive, 2D/3D cases are tricky—spatially adjacent tokens may be far apart in memory, and memory-adjacent tokens may be far apart spatially. This visualization clarifies the mapping and helps you design effective sparse attention patterns for multi-dimensional data like images or videos.
 
 ![demo](./assets/demo.jpg)
 
