@@ -138,6 +138,8 @@ export function SlidingWindowViz() {
   const [isDragging, setIsDragging] = useState(false)
   const [colorScheme, setColorScheme] = useState<ColorScheme>(initialState.colorScheme)
   const [showShareToast, setShowShareToast] = useState(false)
+  const [maskScale, setMaskScale] = useState(1)
+  const tokenGridRef = useRef<HTMLDivElement>(null)
 
   const actualVolumeShape: VolumeShape = useMemo(() => {
     const [d0 = 1, d1 = 1, d2 = 1] = shape.length === 1 ? [1, 1, shape[0]] : shape.length === 2 ? [1, ...shape] : shape
@@ -208,6 +210,16 @@ export function SlidingWindowViz() {
       alert(`Share this URL:\n${shareUrl}`)
     }
   }
+
+  // Auto-scroll left panel to selected token
+  useEffect(() => {
+    if (selectedToken === null || !tokenGridRef.current) return
+
+    const tokenElement = tokenGridRef.current.querySelector(`[data-token-id="${selectedToken}"]`)
+    if (tokenElement) {
+      tokenElement.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+  }, [selectedToken])
 
   return (
     <div
@@ -377,7 +389,7 @@ export function SlidingWindowViz() {
           </div>
 
           {/* Scrollable Token Grid Area */}
-          <div className="flex-1 overflow-auto mt-4 min-h-0">
+          <div className="flex-1 overflow-auto mt-4 min-h-0" ref={tokenGridRef}>
             {viewMode === '1D Sequence' && (
               <TokenGrid1D
                 width={actualVolumeShape.width}
@@ -480,6 +492,8 @@ export function SlidingWindowViz() {
             onSelectToken={setSelectedToken}
             totalTokens={totalTokens}
             colorScheme={colorScheme}
+            scale={maskScale}
+            onScaleChange={setMaskScale}
           />
         </div>
       </div>
@@ -523,6 +537,7 @@ function TokenGrid({
         return (
           <div
             key={i}
+            data-token-id={tokenIndex}
             className={`w-10 h-10 flex items-center justify-center border rounded cursor-pointer transition-all text-xs font-medium ${
               isSelected
                 ? `${colors.selected} ${colors.selectedBorder} text-white ${colors.selectedShadow}`
@@ -647,29 +662,55 @@ function AttentionMaskView({
   selectedToken,
   onSelectToken,
   totalTokens,
-  colorScheme
+  colorScheme,
+  scale,
+  onScaleChange
 }: {
   mask: boolean[][]
   selectedToken: number | null
   onSelectToken: (token: number) => void
   totalTokens: number
   colorScheme: ColorScheme
+  scale: number
+  onScaleChange: (scale: number) => void
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const [hoveredRow, setHoveredRow] = useState<number | null>(null)
   const [tooltip, setTooltip] = useState<{ x: number; y: number; text: string } | null>(null)
 
-  // Cell size and layout constants
-  const CELL_SIZE = 16
+  // Cell size and layout constants - dynamically adjust for large matrices
+  // Browser canvas max size is typically 16384 or 32768 pixels
+  const MAX_CANVAS_SIZE = 8192 // Conservative limit to stay well within browser limits
+  const BASE_CELL_SIZE = 16
   const CELL_GAP = 1
-  const ROW_LABEL_WIDTH = 24
-  const COL_LABEL_HEIGHT = 20
 
-  // Calculate display size (no longer limited to 256)
+  // Calculate cell size to fit within max canvas size
+  const idealCanvasSize = totalTokens * (BASE_CELL_SIZE + CELL_GAP) - CELL_GAP
+  const CELL_SIZE = idealCanvasSize > MAX_CANVAS_SIZE
+    ? Math.max(1, Math.floor((MAX_CANVAS_SIZE / totalTokens) - CELL_GAP))
+    : BASE_CELL_SIZE
+
+  // Calculate display size
   const displaySize = totalTokens
   const canvasWidth = displaySize * (CELL_SIZE + CELL_GAP) - CELL_GAP
   const canvasHeight = displaySize * (CELL_SIZE + CELL_GAP) - CELL_GAP
+
+  // Zoom controls
+  const handleFitToView = () => {
+    if (!containerRef.current) return
+    const availableWidth = containerRef.current.clientWidth
+    const availableHeight = containerRef.current.clientHeight
+    if (availableWidth === 0 || availableHeight === 0) return
+    const scaleX = availableWidth / canvasWidth
+    const scaleY = availableHeight / canvasHeight
+    const fitScale = Math.min(scaleX, scaleY, 1)
+    onScaleChange(fitScale)
+  }
+
+  const handleReset = () => onScaleChange(1)
+  const handleZoomIn = () => onScaleChange(Math.min(scale * 1.2, 3))
+  const handleZoomOut = () => onScaleChange(Math.max(scale / 1.2, 0.1))
 
   // Get RGB colors for the selected scheme
   const getColors = (isSelfAttention: boolean, canAttend: boolean): string => {
@@ -705,7 +746,7 @@ function AttentionMaskView({
     return '#b45309' // warm
   }
 
-  // Draw the attention mask
+  // Draw the attention mask - only redraw when mask data changes, not on scale change
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
@@ -713,12 +754,11 @@ function AttentionMaskView({
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
-    // Set canvas size for high DPI displays
-    const dpr = window.devicePixelRatio || 1
+    // For large canvases, skip DPR scaling to stay within browser limits
+    // Browser max canvas size is typically 16384 or 32768 pixels
+    const dpr = canvasWidth <= 4096 ? (window.devicePixelRatio || 1) : 1
     canvas.width = canvasWidth * dpr
     canvas.height = canvasHeight * dpr
-    canvas.style.width = `${canvasWidth}px`
-    canvas.style.height = `${canvasHeight}px`
     ctx.scale(dpr, dpr)
 
     // Clear canvas
@@ -752,7 +792,7 @@ function AttentionMaskView({
       ctx.fillStyle = 'rgba(209, 213, 219, 0.3)' // gray-300 with opacity
       ctx.fillRect(0, y, canvasWidth, CELL_SIZE)
     }
-  }, [mask, selectedToken, hoveredRow, colorScheme, displaySize, canvasWidth, canvasHeight])
+  }, [mask, selectedToken, hoveredRow, colorScheme, displaySize, canvasWidth, canvasHeight, CELL_SIZE, CELL_GAP])
 
   // Auto-scroll to selected token row and column (diagonal position)
   useEffect(() => {
@@ -761,9 +801,11 @@ function AttentionMaskView({
     const canvasContainer = canvasRef.current.parentElement
     if (!canvasContainer) return
 
-    const cellSize = CELL_SIZE + CELL_GAP
+    // Calculate position in scaled canvas coordinates
+    const cellSize = (CELL_SIZE + CELL_GAP) * scale
     const rowY = selectedToken * cellSize
     const colX = selectedToken * cellSize
+    const scaledCellSize = CELL_SIZE * scale
 
     // Calculate the visible area
     const containerTop = canvasContainer.scrollTop
@@ -772,9 +814,9 @@ function AttentionMaskView({
     const containerRight = containerLeft + canvasContainer.clientWidth
 
     const rowTop = rowY
-    const rowBottom = rowY + CELL_SIZE
+    const rowBottom = rowY + scaledCellSize
     const colLeft = colX
-    const colRight = colX + CELL_SIZE
+    const colRight = colX + scaledCellSize
 
     // Calculate scroll positions
     let scrollTop = canvasContainer.scrollTop
@@ -783,13 +825,13 @@ function AttentionMaskView({
     // Check if row is not fully visible vertically
     if (rowTop < containerTop || rowBottom > containerBottom) {
       // Scroll to center the row in the viewport
-      scrollTop = rowY - canvasContainer.clientHeight / 2 + CELL_SIZE / 2
+      scrollTop = rowY - canvasContainer.clientHeight / 2 + scaledCellSize / 2
     }
 
     // Check if column (diagonal position) is not fully visible horizontally
     if (colLeft < containerLeft || colRight > containerRight) {
       // Scroll to center the column in the viewport
-      scrollLeft = colX - canvasContainer.clientWidth / 2 + CELL_SIZE / 2
+      scrollLeft = colX - canvasContainer.clientWidth / 2 + scaledCellSize / 2
     }
 
     // Perform the scroll if needed
@@ -800,7 +842,7 @@ function AttentionMaskView({
         behavior: 'smooth'
       })
     }
-  }, [selectedToken, CELL_SIZE, CELL_GAP])
+  }, [selectedToken, CELL_SIZE, CELL_GAP, scale])
 
   // Handle mouse move for hover and tooltip
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -808,8 +850,8 @@ function AttentionMaskView({
     if (!canvas) return
 
     const rect = canvas.getBoundingClientRect()
-    const x = e.clientX - rect.left
-    const y = e.clientY - rect.top
+    const x = (e.clientX - rect.left) / scale
+    const y = (e.clientY - rect.top) / scale
 
     const row = Math.floor(y / (CELL_SIZE + CELL_GAP))
     const col = Math.floor(x / (CELL_SIZE + CELL_GAP))
@@ -840,7 +882,7 @@ function AttentionMaskView({
     if (!canvas) return
 
     const rect = canvas.getBoundingClientRect()
-    const y = e.clientY - rect.top
+    const y = (e.clientY - rect.top) / scale
 
     const row = Math.floor(y / (CELL_SIZE + CELL_GAP))
 
@@ -849,158 +891,52 @@ function AttentionMaskView({
     }
   }
 
-  // Generate row labels - use absolute positioning to match Canvas
-  const rowLabels = []
-  for (let i = 0; i < displaySize; i++) {
-    rowLabels.push(
-      <div
-        key={i}
-        className="absolute flex items-center justify-center text-[10px] font-medium text-gray-600"
-        style={{
-          height: `${CELL_SIZE}px`,
-          width: `${ROW_LABEL_WIDTH}px`,
-          top: `${i * (CELL_SIZE + CELL_GAP)}px`
-        }}
-      >
-        {i}
-      </div>
-    )
-  }
-
-  // Generate column labels - use absolute positioning to match Canvas
-  const columnLabels = []
-  for (let i = 0; i < displaySize; i++) {
-    columnLabels.push(
-      <div
-        key={i}
-        className="absolute flex items-center justify-center text-[10px] font-medium text-gray-600"
-        style={{
-          width: `${CELL_SIZE}px`,
-          height: `${COL_LABEL_HEIGHT}px`,
-          left: `${i * (CELL_SIZE + CELL_GAP)}px`
-        }}
-      >
-        {i}
-      </div>
-    )
-  }
-
   return (
     <div className="flex-1 flex flex-col gap-2 min-h-0">
-      <div className="flex-1 bg-gray-100 border-2 border-gray-300 rounded-lg p-4 overflow-hidden" ref={containerRef}>
-        <div className="flex flex-col bg-gray-200 p-2 h-full">
-          {/* Fixed header row with column labels */}
-          <div className="flex mb-1 bg-gray-200 z-10">
-            {/* Empty corner cell */}
-            <div
-              style={{ width: `${ROW_LABEL_WIDTH}px`, height: `${COL_LABEL_HEIGHT}px` }}
-              className="mr-1 bg-gray-200 flex-shrink-0"
-            />
-            {/* Column headers - scrollable horizontally without scrollbar */}
-            <div
-              className="overflow-x-auto overflow-y-hidden"
-              ref={(el) => {
-                if (el && canvasRef.current) {
-                  const canvasContainer = canvasRef.current.parentElement
-                  if (canvasContainer) {
-                    const syncScroll = () => {
-                      el.scrollLeft = canvasContainer.scrollLeft
-                    }
-                    canvasContainer.addEventListener('scroll', syncScroll)
-                    return () => canvasContainer.removeEventListener('scroll', syncScroll)
-                  }
-                }
-              }}
-              style={{
-                height: `${COL_LABEL_HEIGHT}px`,
-                scrollbarWidth: 'none',
-                msOverflowStyle: 'none'
-              }}
-            >
-              <style>{`
-                .overflow-x-auto::-webkit-scrollbar {
-                  display: none;
-                }
-              `}</style>
-              <div className="relative" style={{ height: `${COL_LABEL_HEIGHT}px`, width: `${canvasWidth}px` }}>
-                {columnLabels}
-              </div>
-            </div>
-          </div>
-
-          {/* Main content area with synchronized scrolling */}
-          <div className="flex flex-1 min-h-0">
-            {/* Fixed row labels - no scrollbar */}
-            <div
-              className="mr-1 overflow-y-auto overflow-x-hidden flex-shrink-0"
-              style={{
-                width: `${ROW_LABEL_WIDTH}px`,
-                scrollbarWidth: 'none',
-                msOverflowStyle: 'none'
-              }}
-              ref={(el) => {
-                if (el) {
-                  // Hide webkit scrollbar
-                  const style = document.createElement('style')
-                  style.textContent = `
-                    .flex.flex-col.mr-1::-webkit-scrollbar {
-                      display: none;
-                    }
-                  `
-                  if (!document.head.querySelector('style[data-row-labels]')) {
-                    style.setAttribute('data-row-labels', 'true')
-                    document.head.appendChild(style)
-                  }
-                }
-                if (el && canvasRef.current) {
-                  // Sync vertical scroll with canvas container
-                  const canvasContainer = canvasRef.current.parentElement
-                  if (canvasContainer) {
-                    const syncScroll = () => {
-                      el.scrollTop = canvasContainer.scrollTop
-                    }
-                    canvasContainer.addEventListener('scroll', syncScroll)
-                    return () => canvasContainer.removeEventListener('scroll', syncScroll)
-                  }
-                }
-              }}
-            >
-              <div className="relative" style={{ height: `${canvasHeight}px`, width: `${ROW_LABEL_WIDTH}px` }}>
-                {rowLabels}
-              </div>
-            </div>
-
-            {/* Canvas - scrollable in both directions with visible scrollbar */}
-            <div
-              className="overflow-auto flex-1"
-              style={{
-                scrollbarWidth: 'thin',
-                scrollbarColor: '#9ca3af #e5e7eb'
-              }}
-              onScroll={(e) => {
-                // Sync column headers horizontal scroll
-                const target = e.currentTarget
-                const colHeaderContainer = target.parentElement?.previousElementSibling?.querySelector('.overflow-x-auto')
-                if (colHeaderContainer) {
-                  colHeaderContainer.scrollLeft = target.scrollLeft
-                }
-                // Sync row labels vertical scroll
-                const rowLabelContainer = target.previousElementSibling
-                if (rowLabelContainer) {
-                  rowLabelContainer.scrollTop = target.scrollTop
-                }
-              }}
-            >
-              <canvas
-                ref={canvasRef}
-                className="cursor-pointer"
-                onMouseMove={handleMouseMove}
-                onMouseLeave={handleMouseLeave}
-                onClick={handleClick}
-              />
-            </div>
-          </div>
-        </div>
+      {/* Zoom Controls */}
+      <div className="flex items-center gap-2 justify-end">
+        <button
+          onClick={handleFitToView}
+          className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-100 hover:border-gray-400 transition-colors"
+          title="Fit to view"
+        >
+          Fit
+        </button>
+        <button
+          onClick={handleReset}
+          className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-100 hover:border-gray-400 transition-colors"
+          title="Reset to default size"
+        >
+          Reset
+        </button>
+        <button
+          onClick={handleZoomIn}
+          className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-100 hover:border-gray-400 transition-colors"
+          title="Zoom in"
+        >
+          +
+        </button>
+        <button
+          onClick={handleZoomOut}
+          className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-100 hover:border-gray-400 transition-colors"
+          title="Zoom out"
+        >
+          −
+        </button>
+        <span className="text-sm text-gray-600">{Math.round(scale * 100)}%</span>
+      </div>
+      <div className="flex-1 bg-gray-100 border-2 border-gray-300 rounded-lg p-4 overflow-auto" ref={containerRef}>
+        <canvas
+          ref={canvasRef}
+          className="cursor-pointer"
+          style={{
+            width: canvasWidth * scale,
+            height: canvasHeight * scale
+          }}
+          onMouseMove={handleMouseMove}
+          onMouseLeave={handleMouseLeave}
+          onClick={handleClick}
+        />
       </div>
 
       {/* Tooltip */}
