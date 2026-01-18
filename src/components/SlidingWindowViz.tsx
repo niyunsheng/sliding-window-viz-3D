@@ -108,7 +108,7 @@ const viewConfigs: Record<ViewMode, ViewConfig> = {
 
 export function SlidingWindowViz() {
   const getInitialState = () => {
-    const urlParams = new URLSearchParams(globalThis.window.location.search)
+    const urlParams = new URLSearchParams(window.location.search)
     const modeParam = urlParams.get('mode')
     const mode = (modeParam && viewModeReverseMap[modeParam]) || '3D Video'
     const config = viewConfigs[mode]
@@ -183,7 +183,7 @@ export function SlidingWindowViz() {
 
   const handleMouseMove = (e: React.MouseEvent) => {
     if (isDragging) {
-      const percentage = (e.clientX / globalThis.window.innerWidth) * 100
+      const percentage = (e.clientX / window.innerWidth) * 100
       setLeftPanelWidth(Math.min(Math.max(percentage, 30), 70))
     }
   }
@@ -198,16 +198,17 @@ export function SlidingWindowViz() {
       `shape=${shape.join(',')}`,
       `window=${windowSize.join(',')}`,
       `causal=${causal.map(c => c ? '1' : '0').join(',')}`,
+      `color=${colorScheme}`,
       selectedToken !== null ? `token=${selectedToken}` : ''
     ].filter(Boolean).join('&')
 
-    const shareUrl = `${globalThis.window.location.origin}${globalThis.window.location.pathname}?${params}`
+    const shareUrl = `${window.location.origin}${window.location.pathname}?${params}`
 
     try {
       await navigator.clipboard.writeText(shareUrl)
       setShowShareToast(true)
       setTimeout(() => setShowShareToast(false), 3000)
-    } catch (err) {
+    } catch {
       alert(`Share this URL:\n${shareUrl}`)
     }
   }
@@ -744,40 +745,6 @@ function AttentionMaskView({
   const canvasWidth = displaySize * (CELL_SIZE + CELL_GAP) - CELL_GAP
   const canvasHeight = displaySize * (CELL_SIZE + CELL_GAP) - CELL_GAP
 
-  // Get RGB colors for the selected scheme
-  const getColors = (isSelfAttention: boolean, canAttend: boolean): string => {
-    if (colorScheme === 'blue') {
-      if (isSelfAttention) return '#3b82f6' // blue-500
-      if (canAttend) return '#bfdbfe' // blue-200
-      return '#f3f4f6' // gray-100
-    } else if (colorScheme === 'grayscale') {
-      if (isSelfAttention) return '#1f2937' // gray-800
-      if (canAttend) return '#d1d5db' // gray-300
-      return '#f3f4f6' // gray-100
-    } else if (colorScheme === 'green') {
-      if (isSelfAttention) return '#16a34a' // green-600
-      if (canAttend) return '#bbf7d0' // green-200
-      return '#f3f4f6' // gray-100
-    } else if (colorScheme === 'purple-orange') {
-      if (isSelfAttention) return '#9333ea' // purple-600
-      if (canAttend) return '#fed7aa' // orange-300
-      return '#f3f4f6' // gray-100
-    } else { // warm
-      if (isSelfAttention) return '#b45309' // amber-700
-      if (canAttend) return '#fde68a' // amber-200
-      return '#f3f4f6' // gray-100
-    }
-  }
-
-  // Get border color for selected row
-  const getBorderColor = (): string => {
-    if (colorScheme === 'blue') return '#3b82f6'
-    if (colorScheme === 'grayscale') return '#1f2937'
-    if (colorScheme === 'green') return '#16a34a'
-    if (colorScheme === 'purple-orange') return '#9333ea'
-    return '#b45309' // warm
-  }
-
   // Draw the attention mask - only redraw when mask data changes, not on scale change
   useEffect(() => {
     const canvas = canvasRef.current
@@ -785,6 +752,40 @@ function AttentionMaskView({
 
     const ctx = canvas.getContext('2d')
     if (!ctx) return
+
+    // Get RGB colors for the selected scheme
+    const getColors = (isSelfAttention: boolean, canAttend: boolean): string => {
+      if (colorScheme === 'blue') {
+        if (isSelfAttention) return '#3b82f6' // blue-500
+        if (canAttend) return '#bfdbfe' // blue-200
+        return '#f3f4f6' // gray-100
+      } else if (colorScheme === 'grayscale') {
+        if (isSelfAttention) return '#1f2937' // gray-800
+        if (canAttend) return '#d1d5db' // gray-300
+        return '#f3f4f6' // gray-100
+      } else if (colorScheme === 'green') {
+        if (isSelfAttention) return '#16a34a' // green-600
+        if (canAttend) return '#bbf7d0' // green-200
+        return '#f3f4f6' // gray-100
+      } else if (colorScheme === 'purple-orange') {
+        if (isSelfAttention) return '#9333ea' // purple-600
+        if (canAttend) return '#fed7aa' // orange-300
+        return '#f3f4f6' // gray-100
+      } else { // warm
+        if (isSelfAttention) return '#b45309' // amber-700
+        if (canAttend) return '#fde68a' // amber-200
+        return '#f3f4f6' // gray-100
+      }
+    }
+
+    // Get border color for selected row
+    const getBorderColor = (): string => {
+      if (colorScheme === 'blue') return '#3b82f6'
+      if (colorScheme === 'grayscale') return '#1f2937'
+      if (colorScheme === 'green') return '#16a34a'
+      if (colorScheme === 'purple-orange') return '#9333ea'
+      return '#b45309' // warm
+    }
 
     // For large canvases, skip DPR scaling to stay within browser limits
     // Browser max canvas size is typically 16384 or 32768 pixels
@@ -928,12 +929,14 @@ function AttentionMaskView({
 
   useEffect(() => {
     if (!containerRef.current || !colHeaderRef.current || !rowHeaderRef.current) return
+    const container = containerRef.current
     const syncScroll = () => {
-      if (colHeaderRef.current) colHeaderRef.current.scrollLeft = containerRef.current!.scrollLeft
-      if (rowHeaderRef.current) rowHeaderRef.current.scrollTop = containerRef.current!.scrollTop
+      if (colHeaderRef.current) colHeaderRef.current.scrollLeft = container.scrollLeft
+      if (rowHeaderRef.current) rowHeaderRef.current.scrollTop = container.scrollTop
     }
-    containerRef.current.addEventListener('scroll', syncScroll)
-    return () => containerRef.current?.removeEventListener('scroll', syncScroll)
+    container.addEventListener('scroll', syncScroll)
+    return () => container.removeEventListener('scroll', syncScroll)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   return (
