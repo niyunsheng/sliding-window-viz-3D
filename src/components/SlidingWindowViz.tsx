@@ -219,8 +219,33 @@ export function SlidingWindowViz() {
         {/* Left: Token Visualization */}
         <div className="flex flex-col p-8 overflow-hidden" style={{ width: `${leftPanelWidth}%` }}>
           {/* Fixed Header Section */}
-          <div className="mb-2">
+          <div className="mb-2 flex items-center justify-between gap-4">
             <h1 className="m-0 text-2xl font-bold text-gray-900">3D Sliding Window Visualization</h1>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <a
+                href="https://github.com/niyunsheng/sliding-window-viz-3D"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-900 text-white no-underline rounded-md font-medium text-sm transition-all hover:bg-gray-800 hover:-translate-y-0.5 hover:shadow-md"
+              >
+                <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true" className="w-4 h-4">
+                  <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path>
+                </svg>
+                <span>Star on GitHub</span>
+              </a>
+              <a
+                href="https://github.com/niyunsheng/sliding-window-viz-3D/issues"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white text-gray-700 no-underline rounded-md font-medium text-sm border border-gray-300 transition-all hover:bg-gray-50 hover:border-gray-400"
+              >
+                <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true" className="w-4 h-4">
+                  <path d="M8 9.5a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"></path>
+                  <path fillRule="evenodd" d="M8 0a8 8 0 100 16A8 8 0 008 0zM1.5 8a6.5 6.5 0 1113 0 6.5 6.5 0 01-13 0z"></path>
+                </svg>
+                <span>Report Issue</span>
+              </a>
+            </div>
           </div>
 
           {/* Fixed View Mode Selector - Radio Button Group */}
@@ -395,23 +420,12 @@ export function SlidingWindowViz() {
             <p className="m-0 text-sm text-gray-600 text-center mt-4">Click a token to see its attention pattern</p>
           </div>
 
-          {/* Fixed GitHub Star Button - Bottom */}
-          <div className="pt-4 border-t border-gray-200">
-            <div className="flex items-center gap-3 flex-wrap">
-              <p className="text-sm text-gray-700 m-0">
-                Interactive visualization of sliding window attention in 1D/2D/3D.
+          {/* Fixed Bottom Section */}
+          <div className="pt-4">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3">
+              <p className="text-sm text-gray-700 m-0 leading-relaxed">
+                <span className="font-semibold text-blue-900">Why this tool?</span> While 1D sliding window is intuitive, 2D/3D cases are tricky—spatially adjacent tokens may be far apart in memory. This visualization clarifies the mapping.
               </p>
-              <a
-                href="https://github.com/niyunsheng/sliding-window-viz-3D"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 px-3 py-1.5 bg-gray-900 text-white no-underline rounded-md font-medium text-sm transition-all hover:bg-gray-800 hover:-translate-y-0.5 hover:shadow-md"
-              >
-                <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true" className="w-4 h-4">
-                  <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path>
-                </svg>
-                <span>⭐ Star on GitHub</span>
-              </a>
             </div>
           </div>
         </div>
