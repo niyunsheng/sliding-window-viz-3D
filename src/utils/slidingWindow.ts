@@ -16,6 +16,12 @@ export interface Position3D {
   width: number
 }
 
+export interface Causal3D {
+  frame: boolean
+  height: boolean
+  width: boolean
+}
+
 /**
  * Convert a 1D position index to 3D coordinates (frame, height, width)
  */
@@ -42,25 +48,24 @@ export function getWindows3D(
   position3D: Position3D,
   volumeShape: VolumeShape,
   windowSize: Position3D,
-  causal: boolean = false
+  causal: Causal3D = { frame: false, height: false, width: false }
 ): Position3D[] {
   const frameStart = Math.max(position3D.frame - windowSize.frame, 0)
   const heightStart = Math.max(position3D.height - windowSize.height, 0)
   const widthStart = Math.max(position3D.width - windowSize.width, 0)
 
-  let frameEnd: number, heightEnd: number, widthEnd: number
+  // Each dimension can be independently causal
+  const frameEnd = causal.frame
+    ? position3D.frame + 1
+    : Math.min(position3D.frame + 1 + windowSize.frame, volumeShape.frames)
 
-  if (causal) {
-    // Causal: only include current and past positions
-    frameEnd = position3D.frame + 1
-    heightEnd = position3D.height + 1
-    widthEnd = position3D.width + 1
-  } else {
-    // Non-causal: include future positions as well
-    frameEnd = Math.min(position3D.frame + 1 + windowSize.frame, volumeShape.frames)
-    heightEnd = Math.min(position3D.height + 1 + windowSize.height, volumeShape.height)
-    widthEnd = Math.min(position3D.width + 1 + windowSize.width, volumeShape.width)
-  }
+  const heightEnd = causal.height
+    ? position3D.height + 1
+    : Math.min(position3D.height + 1 + windowSize.height, volumeShape.height)
+
+  const widthEnd = causal.width
+    ? position3D.width + 1
+    : Math.min(position3D.width + 1 + windowSize.width, volumeShape.width)
 
   const results: Position3D[] = []
   for (let f = frameStart; f < frameEnd; f++) {
@@ -79,7 +84,7 @@ export function getWindows3D(
 export function getSlidingWindowMask3D(
   volumeShape: VolumeShape,
   windowSize: Position3D,
-  causal: boolean = false
+  causal: Causal3D = { frame: false, height: false, width: false }
 ): boolean[][] {
   const totalTokens = volumeShape.frames * volumeShape.height * volumeShape.width
 

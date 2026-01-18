@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, useEffect } from 'react'
-import { getSlidingWindowMask3D, type VolumeShape, type Position3D } from '../utils/slidingWindow'
+import { getSlidingWindowMask3D, type VolumeShape, type Position3D, type Causal3D } from '../utils/slidingWindow'
 
 type ViewMode = '1D Sequence' | '2D Image' | '3D Video'
 
@@ -84,7 +84,9 @@ export function SlidingWindowViz() {
     return {
       viewMode: (params.get('mode') as ViewMode) || '3D Video',
       selectedToken: params.get('token') ? Number(params.get('token')) : null,
-      causal: params.get('causal') === 'true',
+      causalFrame: params.get('cf') === 'true',
+      causalHeight: params.get('ch') === 'true',
+      causalWidth: params.get('cw') === 'true',
       colorScheme: (params.get('color') as ColorScheme) || 'blue',
       sequenceLength: Number(params.get('seq') || 16),
       windowSize1D: Number(params.get('w1d') || 2),
@@ -105,7 +107,9 @@ export function SlidingWindowViz() {
 
   const [viewMode, setViewMode] = useState<ViewMode>(initialState.viewMode)
   const [selectedToken, setSelectedToken] = useState<number | null>(initialState.selectedToken)
-  const [causal, setCausal] = useState(initialState.causal)
+  const [causalFrame, setCausalFrame] = useState(initialState.causalFrame)
+  const [causalHeight, setCausalHeight] = useState(initialState.causalHeight)
+  const [causalWidth, setCausalWidth] = useState(initialState.causalWidth)
   const [leftPanelWidth, setLeftPanelWidth] = useState(50) // percentage
   const [isDragging, setIsDragging] = useState(false)
   const [colorScheme, setColorScheme] = useState<ColorScheme>(initialState.colorScheme)
@@ -149,10 +153,14 @@ export function SlidingWindowViz() {
     }
   }, [viewMode, windowSize1D, windowHeight2D, windowWidth2D, windowFrame3D, windowHeight3D, windowWidth3D])
 
+  const actualCausal: Causal3D = useMemo(() => {
+    return { frame: causalFrame, height: causalHeight, width: causalWidth }
+  }, [causalFrame, causalHeight, causalWidth])
+
   // Generate attention mask
   const attentionMask = useMemo(() => {
-    return getSlidingWindowMask3D(actualVolumeShape, actualWindowSize, causal)
-  }, [actualVolumeShape, actualWindowSize, causal])
+    return getSlidingWindowMask3D(actualVolumeShape, actualWindowSize, actualCausal)
+  }, [actualVolumeShape, actualWindowSize, actualCausal])
 
   const totalTokens = actualVolumeShape.frames * actualVolumeShape.height * actualVolumeShape.width
 
@@ -189,7 +197,9 @@ export function SlidingWindowViz() {
     const params = new URLSearchParams()
     params.set('mode', viewMode)
     if (selectedToken !== null) params.set('token', selectedToken.toString())
-    params.set('causal', causal.toString())
+    params.set('cf', causalFrame.toString())
+    params.set('ch', causalHeight.toString())
+    params.set('cw', causalWidth.toString())
     params.set('color', colorScheme)
 
     // Add mode-specific parameters
@@ -435,15 +445,74 @@ export function SlidingWindowViz() {
             )}
 
             <div className="w-px h-4 bg-gray-300"></div>
-            <label className="flex items-center gap-1.5 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={causal}
-                onChange={(e) => setCausal(e.target.checked)}
-                className="w-3.5 h-3.5 cursor-pointer accent-blue-500"
-              />
-              <span className="font-semibold text-gray-700">Causal</span>
-            </label>
+
+            {/* Causal checkboxes - different labels based on view mode */}
+            {viewMode === '1D Sequence' && (
+              <label className="flex items-center gap-1.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={causalWidth}
+                  onChange={(e) => setCausalWidth(e.target.checked)}
+                  className="w-3.5 h-3.5 cursor-pointer accent-blue-500"
+                />
+                <span className="font-semibold text-gray-700">Causal</span>
+              </label>
+            )}
+
+            {viewMode === '2D Image' && (
+              <>
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={causalHeight}
+                    onChange={(e) => setCausalHeight(e.target.checked)}
+                    className="w-3.5 h-3.5 cursor-pointer accent-blue-500"
+                  />
+                  <span className="font-semibold text-gray-700">Causal Height</span>
+                </label>
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={causalWidth}
+                    onChange={(e) => setCausalWidth(e.target.checked)}
+                    className="w-3.5 h-3.5 cursor-pointer accent-blue-500"
+                  />
+                  <span className="font-semibold text-gray-700">Causal Width</span>
+                </label>
+              </>
+            )}
+
+            {viewMode === '3D Video' && (
+              <>
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={causalFrame}
+                    onChange={(e) => setCausalFrame(e.target.checked)}
+                    className="w-3.5 h-3.5 cursor-pointer accent-blue-500"
+                  />
+                  <span className="font-semibold text-gray-700">Causal Frame</span>
+                </label>
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={causalHeight}
+                    onChange={(e) => setCausalHeight(e.target.checked)}
+                    className="w-3.5 h-3.5 cursor-pointer accent-blue-500"
+                  />
+                  <span className="font-semibold text-gray-700">Causal Height</span>
+                </label>
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={causalWidth}
+                    onChange={(e) => setCausalWidth(e.target.checked)}
+                    className="w-3.5 h-3.5 cursor-pointer accent-blue-500"
+                  />
+                  <span className="font-semibold text-gray-700">Causal Width</span>
+                </label>
+              </>
+            )}
           </div>
 
           {/* Fixed Tokens Title with Buttons */}
