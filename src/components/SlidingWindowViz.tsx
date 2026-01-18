@@ -140,6 +140,7 @@ export function SlidingWindowViz() {
   const [showShareToast, setShowShareToast] = useState(false)
   const [maskScale, setMaskScale] = useState(1)
   const tokenGridRef = useRef<HTMLDivElement>(null)
+  const maskContainerRef = useRef<HTMLDivElement>(null)
 
   const actualVolumeShape: VolumeShape = useMemo(() => {
     const [d0 = 1, d1 = 1, d2 = 1] = shape.length === 1 ? [1, 1, shape[0]] : shape.length === 2 ? [1, ...shape] : shape
@@ -210,6 +211,26 @@ export function SlidingWindowViz() {
       alert(`Share this URL:\n${shareUrl}`)
     }
   }
+
+  const handleFitToView = () => {
+    if (!maskContainerRef.current) return
+    const availableWidth = maskContainerRef.current.clientWidth
+    const availableHeight = maskContainerRef.current.clientHeight
+    if (availableWidth === 0 || availableHeight === 0) return
+    const totalTokens = actualVolumeShape.frames * actualVolumeShape.height * actualVolumeShape.width
+    const BASE_CELL_SIZE = 16
+    const CELL_GAP = 1
+    const canvasWidth = totalTokens * (BASE_CELL_SIZE + CELL_GAP) - CELL_GAP
+    const canvasHeight = totalTokens * (BASE_CELL_SIZE + CELL_GAP) - CELL_GAP
+    const scaleX = availableWidth / canvasWidth
+    const scaleY = availableHeight / canvasHeight
+    const fitScale = Math.min(scaleX, scaleY, 1)
+    setMaskScale(fitScale)
+  }
+
+  const handleReset = () => setMaskScale(1)
+  const handleZoomIn = () => setMaskScale(Math.min(maskScale * 1.2, 3))
+  const handleZoomOut = () => setMaskScale(Math.max(maskScale / 1.2, 0.1))
 
   // Auto-scroll left panel to selected token
   useEffect(() => {
@@ -450,11 +471,9 @@ export function SlidingWindowViz() {
 
         {/* Right: Attention Mask */}
         <div className="flex flex-col gap-4 pt-8 px-8 pb-4 overflow-hidden" style={{ width: `${100 - leftPanelWidth}%` }}>
-          <div className="flex items-center justify-between flex-wrap gap-4">
+          <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-4">
               <h2 className="m-0 text-xl font-semibold text-gray-900">Attention Mask ({totalTokens} × {totalTokens})</h2>
-
-              {/* Legend - Compact horizontal layout */}
               <div className="flex items-center gap-3 text-xs">
                 <div className="flex items-center gap-1">
                   <div className={`w-4 h-4 rounded border ${colorSchemes[colorScheme].selectedBorder} ${colorSchemes[colorScheme].selected}`}></div>
@@ -470,7 +489,6 @@ export function SlidingWindowViz() {
                 </div>
               </div>
             </div>
-
             <div className="flex items-center gap-2">
               <label className="text-sm font-semibold text-gray-600">Color Scheme:</label>
               <select
@@ -484,6 +502,35 @@ export function SlidingWindowViz() {
                   </option>
                 ))}
               </select>
+              <button
+                onClick={handleFitToView}
+                className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-100 hover:border-gray-400 transition-colors"
+                title="Fit to view"
+              >
+                Fit
+              </button>
+              <button
+                onClick={handleReset}
+                className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-100 hover:border-gray-400 transition-colors"
+                title="Reset to default size"
+              >
+                Reset
+              </button>
+              <button
+                onClick={handleZoomIn}
+                className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-100 hover:border-gray-400 transition-colors"
+                title="Zoom in"
+              >
+                +
+              </button>
+              <button
+                onClick={handleZoomOut}
+                className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-100 hover:border-gray-400 transition-colors"
+                title="Zoom out"
+              >
+                −
+              </button>
+              <span className="text-sm text-gray-600">{Math.round(maskScale * 100)}%</span>
             </div>
           </div>
           <AttentionMaskView
@@ -493,7 +540,7 @@ export function SlidingWindowViz() {
             totalTokens={totalTokens}
             colorScheme={colorScheme}
             scale={maskScale}
-            onScaleChange={setMaskScale}
+            containerRef={maskContainerRef}
           />
         </div>
       </div>
@@ -664,7 +711,7 @@ function AttentionMaskView({
   totalTokens,
   colorScheme,
   scale,
-  onScaleChange
+  containerRef
 }: {
   mask: boolean[][]
   selectedToken: number | null
@@ -672,10 +719,9 @@ function AttentionMaskView({
   totalTokens: number
   colorScheme: ColorScheme
   scale: number
-  onScaleChange: (scale: number) => void
+  containerRef: React.RefObject<HTMLDivElement>
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const containerRef = useRef<HTMLDivElement>(null)
   const [hoveredRow, setHoveredRow] = useState<number | null>(null)
   const [tooltip, setTooltip] = useState<{ x: number; y: number; text: string } | null>(null)
 
@@ -684,6 +730,8 @@ function AttentionMaskView({
   const MAX_CANVAS_SIZE = 8192 // Conservative limit to stay well within browser limits
   const BASE_CELL_SIZE = 16
   const CELL_GAP = 1
+  const ROW_LABEL_WIDTH = 30
+  const COL_LABEL_HEIGHT = 24
 
   // Calculate cell size to fit within max canvas size
   const idealCanvasSize = totalTokens * (BASE_CELL_SIZE + CELL_GAP) - CELL_GAP
@@ -695,22 +743,6 @@ function AttentionMaskView({
   const displaySize = totalTokens
   const canvasWidth = displaySize * (CELL_SIZE + CELL_GAP) - CELL_GAP
   const canvasHeight = displaySize * (CELL_SIZE + CELL_GAP) - CELL_GAP
-
-  // Zoom controls
-  const handleFitToView = () => {
-    if (!containerRef.current) return
-    const availableWidth = containerRef.current.clientWidth
-    const availableHeight = containerRef.current.clientHeight
-    if (availableWidth === 0 || availableHeight === 0) return
-    const scaleX = availableWidth / canvasWidth
-    const scaleY = availableHeight / canvasHeight
-    const fitScale = Math.min(scaleX, scaleY, 1)
-    onScaleChange(fitScale)
-  }
-
-  const handleReset = () => onScaleChange(1)
-  const handleZoomIn = () => onScaleChange(Math.min(scale * 1.2, 3))
-  const handleZoomOut = () => onScaleChange(Math.max(scale / 1.2, 0.1))
 
   // Get RGB colors for the selected scheme
   const getColors = (isSelfAttention: boolean, canAttend: boolean): string => {
@@ -891,52 +923,60 @@ function AttentionMaskView({
     }
   }
 
+  const colHeaderRef = useRef<HTMLDivElement>(null)
+  const rowHeaderRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!containerRef.current || !colHeaderRef.current || !rowHeaderRef.current) return
+    const syncScroll = () => {
+      if (colHeaderRef.current) colHeaderRef.current.scrollLeft = containerRef.current!.scrollLeft
+      if (rowHeaderRef.current) rowHeaderRef.current.scrollTop = containerRef.current!.scrollTop
+    }
+    containerRef.current.addEventListener('scroll', syncScroll)
+    return () => containerRef.current?.removeEventListener('scroll', syncScroll)
+  }, [])
+
   return (
     <div className="flex-1 flex flex-col gap-2 min-h-0">
-      {/* Zoom Controls */}
-      <div className="flex items-center gap-2 justify-end">
-        <button
-          onClick={handleFitToView}
-          className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-100 hover:border-gray-400 transition-colors"
-          title="Fit to view"
-        >
-          Fit
-        </button>
-        <button
-          onClick={handleReset}
-          className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-100 hover:border-gray-400 transition-colors"
-          title="Reset to default size"
-        >
-          Reset
-        </button>
-        <button
-          onClick={handleZoomIn}
-          className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-100 hover:border-gray-400 transition-colors"
-          title="Zoom in"
-        >
-          +
-        </button>
-        <button
-          onClick={handleZoomOut}
-          className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-100 hover:border-gray-400 transition-colors"
-          title="Zoom out"
-        >
-          −
-        </button>
-        <span className="text-sm text-gray-600">{Math.round(scale * 100)}%</span>
-      </div>
-      <div className="flex-1 bg-gray-100 border-2 border-gray-300 rounded-lg p-4 overflow-auto" ref={containerRef}>
-        <canvas
-          ref={canvasRef}
-          className="cursor-pointer"
-          style={{
-            width: canvasWidth * scale,
-            height: canvasHeight * scale
-          }}
-          onMouseMove={handleMouseMove}
-          onMouseLeave={handleMouseLeave}
-          onClick={handleClick}
-        />
+      <div className="flex-1 bg-gray-100 border-2 border-gray-300 rounded-lg p-4 overflow-hidden">
+        <div className="flex flex-col h-full">
+          <div className="flex mb-1">
+            <div style={{ width: `${ROW_LABEL_WIDTH}px`, height: `${COL_LABEL_HEIGHT}px` }} className="flex-shrink-0 bg-gray-100" />
+            <div ref={colHeaderRef} className="overflow-hidden" style={{ height: `${COL_LABEL_HEIGHT}px` }}>
+              <div className="relative" style={{ width: `${canvasWidth * scale}px`, height: `${COL_LABEL_HEIGHT}px` }}>
+                {Array.from({ length: displaySize }).map((_, i) => (
+                  <div key={i} className="absolute flex items-center justify-center text-[10px] font-medium text-gray-600" style={{ width: `${CELL_SIZE * scale}px`, height: `${COL_LABEL_HEIGHT}px`, left: `${i * (CELL_SIZE + CELL_GAP) * scale}px` }}>
+                    {i}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+          <div className="flex flex-1 min-h-0">
+            <div ref={rowHeaderRef} className="mr-1 overflow-hidden flex-shrink-0" style={{ width: `${ROW_LABEL_WIDTH}px` }}>
+              <div className="relative" style={{ height: `${canvasHeight * scale}px`, width: `${ROW_LABEL_WIDTH}px` }}>
+                {Array.from({ length: displaySize }).map((_, i) => (
+                  <div key={i} className="absolute flex items-center justify-center text-[10px] font-medium text-gray-600" style={{ height: `${CELL_SIZE * scale}px`, width: `${ROW_LABEL_WIDTH}px`, top: `${i * (CELL_SIZE + CELL_GAP) * scale}px` }}>
+                    {i}
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="flex-1 overflow-auto" ref={containerRef}>
+              <canvas
+                ref={canvasRef}
+                className="cursor-pointer"
+                style={{
+                  width: canvasWidth * scale,
+                  height: canvasHeight * scale
+                }}
+                onMouseMove={handleMouseMove}
+                onMouseLeave={handleMouseLeave}
+                onClick={handleClick}
+              />
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Tooltip */}
