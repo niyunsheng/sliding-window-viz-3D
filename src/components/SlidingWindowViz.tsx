@@ -1,7 +1,29 @@
 import { useState, useMemo, useRef, useEffect } from 'react'
 import { getSlidingWindowMask3D, type VolumeShape, type Position3D, type Causal3D } from '../utils/slidingWindow'
 
-type ViewMode = '1D Sequence' | '2D Image' | '3D Video'
+type ViewMode = '1D Sequence' | '2D Image' | '3D Video' | '3D Volume'
+
+const viewModeMap: Record<ViewMode, string> = {
+  '1D Sequence': 'text',
+  '2D Image': 'image',
+  '3D Video': 'video',
+  '3D Volume': 'volume'
+}
+
+const viewModeReverseMap: Record<string, ViewMode> = {
+  'text': '1D Sequence',
+  'image': '2D Image',
+  'video': '3D Video',
+  'volume': '3D Volume'
+}
+
+interface ViewConfig {
+  icon: string
+  label: string
+  shape: number[]
+  window: number[]
+  dimLabels: string[]
+}
 
 type ColorScheme = 'blue' | 'grayscale' | 'green' | 'purple-orange' | 'warm'
 
@@ -77,29 +99,31 @@ const colorSchemeNames: Record<ColorScheme, string> = {
   warm: 'Warm (Amber)'
 }
 
+const viewConfigs: Record<ViewMode, ViewConfig> = {
+  '1D Sequence': { icon: '📝', label: '1D Sequence', shape: [16], window: [2], dimLabels: ['Length'] },
+  '2D Image': { icon: '🖼️', label: '2D Image', shape: [6, 6], window: [1, 1], dimLabels: ['Height', 'Width'] },
+  '3D Video': { icon: '🎬', label: '3D Video', shape: [5, 5, 5], window: [1, 1, 1], dimLabels: ['Frames', 'Height', 'Width'] },
+  '3D Volume': { icon: '📦', label: '3D Volume', shape: [5, 5, 5], window: [1, 1, 1], dimLabels: ['Depth', 'Height', 'Width'] }
+}
+
 export function SlidingWindowViz() {
-  // Initialize state from URL parameters or defaults
   const getInitialState = () => {
-    const params = new URLSearchParams(window.location.search)
+    const urlParams = new URLSearchParams(globalThis.window.location.search)
+    const modeParam = urlParams.get('mode')
+    const mode = (modeParam && viewModeReverseMap[modeParam]) || '3D Video'
+    const config = viewConfigs[mode]
+
+    const shapeParam = urlParams.get('shape')?.split(',').map(Number) || config.shape
+    const windowParam = urlParams.get('window')?.split(',').map(Number) || config.window
+    const causalParam = urlParams.get('causal')?.split(',').map((v: string) => v === '1') || shapeParam.map(() => false)
+
     return {
-      viewMode: (params.get('mode') as ViewMode) || '3D Video',
-      selectedToken: params.get('token') ? Number(params.get('token')) : null,
-      causalFrame: params.get('cf') === 'true',
-      causalHeight: params.get('ch') === 'true',
-      causalWidth: params.get('cw') === 'true',
-      colorScheme: (params.get('color') as ColorScheme) || 'blue',
-      sequenceLength: Number(params.get('seq') || 16),
-      windowSize1D: Number(params.get('w1d') || 2),
-      height2D: Number(params.get('h2d') || 6),
-      width2D: Number(params.get('w2d') || 6),
-      windowHeight2D: Number(params.get('wh2d') || 1),
-      windowWidth2D: Number(params.get('ww2d') || 1),
-      frames3D: Number(params.get('f3d') || 5),
-      height3D: Number(params.get('h3d') || 5),
-      width3D: Number(params.get('w3d') || 5),
-      windowFrame3D: Number(params.get('wf3d') || 1),
-      windowHeight3D: Number(params.get('wh3d') || 1),
-      windowWidth3D: Number(params.get('ww3d') || 1)
+      viewMode: mode,
+      selectedToken: urlParams.get('token') ? Number(urlParams.get('token')) : null,
+      shape: shapeParam,
+      window: windowParam,
+      causal: causalParam,
+      colorScheme: (urlParams.get('color') as ColorScheme) || 'blue'
     }
   }
 
@@ -107,55 +131,28 @@ export function SlidingWindowViz() {
 
   const [viewMode, setViewMode] = useState<ViewMode>(initialState.viewMode)
   const [selectedToken, setSelectedToken] = useState<number | null>(initialState.selectedToken)
-  const [causalFrame, setCausalFrame] = useState(initialState.causalFrame)
-  const [causalHeight, setCausalHeight] = useState(initialState.causalHeight)
-  const [causalWidth, setCausalWidth] = useState(initialState.causalWidth)
-  const [leftPanelWidth, setLeftPanelWidth] = useState(50) // percentage
+  const [shape, setShape] = useState<number[]>(initialState.shape)
+  const [windowSize, setWindowSize] = useState<number[]>(initialState.window)
+  const [causal, setCausal] = useState<boolean[]>(initialState.causal)
+  const [leftPanelWidth, setLeftPanelWidth] = useState(50)
   const [isDragging, setIsDragging] = useState(false)
   const [colorScheme, setColorScheme] = useState<ColorScheme>(initialState.colorScheme)
   const [showShareToast, setShowShareToast] = useState(false)
 
-  // 1D mode params
-  const [sequenceLength, setSequenceLength] = useState(initialState.sequenceLength)
-  const [windowSize1D, setWindowSize1D] = useState(initialState.windowSize1D)
-
-  // 2D mode params
-  const [height2D, setHeight2D] = useState(initialState.height2D)
-  const [width2D, setWidth2D] = useState(initialState.width2D)
-  const [windowHeight2D, setWindowHeight2D] = useState(initialState.windowHeight2D)
-  const [windowWidth2D, setWindowWidth2D] = useState(initialState.windowWidth2D)
-
-  // 3D mode params
-  const [frames3D, setFrames3D] = useState(initialState.frames3D)
-  const [height3D, setHeight3D] = useState(initialState.height3D)
-  const [width3D, setWidth3D] = useState(initialState.width3D)
-  const [windowFrame3D, setWindowFrame3D] = useState(initialState.windowFrame3D)
-  const [windowHeight3D, setWindowHeight3D] = useState(initialState.windowHeight3D)
-  const [windowWidth3D, setWindowWidth3D] = useState(initialState.windowWidth3D)
-
   const actualVolumeShape: VolumeShape = useMemo(() => {
-    if (viewMode === '1D Sequence') {
-      return { frames: 1, height: 1, width: sequenceLength }
-    } else if (viewMode === '2D Image') {
-      return { frames: 1, height: height2D, width: width2D }
-    } else {
-      return { frames: frames3D, height: height3D, width: width3D }
-    }
-  }, [viewMode, sequenceLength, height2D, width2D, frames3D, height3D, width3D])
+    const [d0 = 1, d1 = 1, d2 = 1] = shape.length === 1 ? [1, 1, shape[0]] : shape.length === 2 ? [1, ...shape] : shape
+    return { frames: d0, height: d1, width: d2 }
+  }, [shape])
 
   const actualWindowSize: Position3D = useMemo(() => {
-    if (viewMode === '1D Sequence') {
-      return { frame: 0, height: 0, width: windowSize1D }
-    } else if (viewMode === '2D Image') {
-      return { frame: 0, height: windowHeight2D, width: windowWidth2D }
-    } else {
-      return { frame: windowFrame3D, height: windowHeight3D, width: windowWidth3D }
-    }
-  }, [viewMode, windowSize1D, windowHeight2D, windowWidth2D, windowFrame3D, windowHeight3D, windowWidth3D])
+    const [w0 = 0, w1 = 0, w2 = 0] = windowSize.length === 1 ? [0, 0, windowSize[0]] : windowSize.length === 2 ? [0, ...windowSize] : windowSize
+    return { frame: w0, height: w1, width: w2 }
+  }, [windowSize])
 
   const actualCausal: Causal3D = useMemo(() => {
-    return { frame: causalFrame, height: causalHeight, width: causalWidth }
-  }, [causalFrame, causalHeight, causalWidth])
+    const [c0 = false, c1 = false, c2 = false] = causal.length === 1 ? [false, false, causal[0]] : causal.length === 2 ? [false, ...causal] : causal
+    return { frame: c0, height: c1, width: c2 }
+  }, [causal])
 
   // Generate attention mask
   const attentionMask = useMemo(() => {
@@ -183,7 +180,7 @@ export function SlidingWindowViz() {
 
   const handleMouseMove = (e: React.MouseEvent) => {
     if (isDragging) {
-      const percentage = (e.clientX / window.innerWidth) * 100
+      const percentage = (e.clientX / globalThis.window.innerWidth) * 100
       setLeftPanelWidth(Math.min(Math.max(percentage, 30), 70))
     }
   }
@@ -192,42 +189,22 @@ export function SlidingWindowViz() {
     setIsDragging(false)
   }
 
-  // Share functionality - generate URL with all parameters
   const handleShare = async () => {
-    const params = new URLSearchParams()
-    params.set('mode', viewMode)
-    if (selectedToken !== null) params.set('token', selectedToken.toString())
-    params.set('cf', causalFrame.toString())
-    params.set('ch', causalHeight.toString())
-    params.set('cw', causalWidth.toString())
-    params.set('color', colorScheme)
+    const params = [
+      `mode=${viewModeMap[viewMode]}`,
+      `shape=${shape.join(',')}`,
+      `window=${windowSize.join(',')}`,
+      `causal=${causal.map(c => c ? '1' : '0').join(',')}`,
+      selectedToken !== null ? `token=${selectedToken}` : ''
+    ].filter(Boolean).join('&')
 
-    // Add mode-specific parameters
-    if (viewMode === '1D Sequence') {
-      params.set('seq', sequenceLength.toString())
-      params.set('w1d', windowSize1D.toString())
-    } else if (viewMode === '2D Image') {
-      params.set('h2d', height2D.toString())
-      params.set('w2d', width2D.toString())
-      params.set('wh2d', windowHeight2D.toString())
-      params.set('ww2d', windowWidth2D.toString())
-    } else {
-      params.set('f3d', frames3D.toString())
-      params.set('h3d', height3D.toString())
-      params.set('w3d', width3D.toString())
-      params.set('wf3d', windowFrame3D.toString())
-      params.set('wh3d', windowHeight3D.toString())
-      params.set('ww3d', windowWidth3D.toString())
-    }
-
-    const shareUrl = `${window.location.origin}${window.location.pathname}?${params.toString()}`
+    const shareUrl = `${globalThis.window.location.origin}${globalThis.window.location.pathname}?${params}`
 
     try {
       await navigator.clipboard.writeText(shareUrl)
       setShowShareToast(true)
       setTimeout(() => setShowShareToast(false), 3000)
     } catch (err) {
-      // Fallback: show alert with URL
       alert(`Share this URL:\n${shareUrl}`)
     }
   }
@@ -248,271 +225,91 @@ export function SlidingWindowViz() {
 
           {/* Fixed View Mode Selector - Radio Button Group */}
           <div className="flex gap-2">
-            <button
-              onClick={() => {
-                setViewMode('1D Sequence')
-                setSelectedToken(null)
-              }}
-              className={`flex-1 px-4 py-3 rounded-md font-medium text-sm transition-all flex items-center justify-center gap-2 ${
-                viewMode === '1D Sequence'
-                  ? 'bg-blue-500 text-white shadow-md border-2 border-blue-600'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border-2 border-gray-300'
-              }`}
-            >
-              <span className="text-lg">📝</span>
-              <span>1D Sequence</span>
-            </button>
-            <button
-              onClick={() => {
-                setViewMode('2D Image')
-                setSelectedToken(null)
-              }}
-              className={`flex-1 px-4 py-3 rounded-md font-medium text-sm transition-all flex items-center justify-center gap-2 ${
-                viewMode === '2D Image'
-                  ? 'bg-blue-500 text-white shadow-md border-2 border-blue-600'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border-2 border-gray-300'
-              }`}
-            >
-              <span className="text-lg">🖼️</span>
-              <span>2D Image</span>
-            </button>
-            <button
-              onClick={() => {
-                setViewMode('3D Video')
-                setSelectedToken(null)
-              }}
-              className={`flex-1 px-4 py-3 rounded-md font-medium text-sm transition-all flex items-center justify-center gap-2 ${
-                viewMode === '3D Video'
-                  ? 'bg-blue-500 text-white shadow-md border-2 border-blue-600'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border-2 border-gray-300'
-              }`}
-            >
-              <span className="text-lg">🎬</span>
-              <span>3D Video</span>
-            </button>
+            {(Object.keys(viewConfigs) as ViewMode[]).map((mode) => {
+              const config = viewConfigs[mode]
+              return (
+                <button
+                  key={mode}
+                  onClick={() => {
+                    setViewMode(mode)
+                    setSelectedToken(null)
+                    setShape(viewConfigs[mode].shape)
+                    setWindowSize(viewConfigs[mode].window)
+                    setCausal(viewConfigs[mode].shape.map(() => false))
+                  }}
+                  className={`flex-1 px-4 py-3 rounded-md font-medium text-sm transition-all flex items-center justify-center gap-2 ${
+                    viewMode === mode
+                      ? 'bg-blue-500 text-white shadow-md border-2 border-blue-600'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border-2 border-gray-300'
+                  }`}
+                >
+                  <span className="text-lg">{config.icon}</span>
+                  <span>{config.label}</span>
+                </button>
+              )
+            })}
           </div>
 
           {/* Fixed Mode-specific Controls */}
           <div className="mt-4 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
-            {viewMode === '1D Sequence' && (
-              <>
-                <label className="flex items-center gap-1.5">
-                  <span className="font-semibold text-gray-600">Length:</span>
+            <div className="flex items-center gap-2">
+              <span className="font-semibold text-gray-600">Shape:</span>
+              {viewConfigs[viewMode].dimLabels.map((label, i) => (
+                <label key={i} className="flex items-center gap-1">
+                  <span className="text-gray-700">{label}</span>
                   <input
                     type="number"
-                    value={sequenceLength}
-                    onChange={(e) => setSequenceLength(Math.max(1, Number(e.target.value)))}
-                    className="w-14 px-1.5 py-0.5 border border-gray-300 rounded text-sm bg-white"
+                    value={shape[i] || 1}
+                    onChange={(e) => {
+                      const newShape = [...shape]
+                      newShape[i] = Math.max(1, Number(e.target.value))
+                      setShape(newShape)
+                    }}
+                    className="w-12 px-1.5 py-0.5 border border-gray-300 rounded text-sm bg-white"
                     min="1"
                   />
                 </label>
-                <div className="w-px h-4 bg-gray-300"></div>
-                <label className="flex items-center gap-1.5">
-                  <span className="font-semibold text-gray-600">Window:</span>
+              ))}
+            </div>
+            <div className="w-px h-4 bg-gray-300"></div>
+            <div className="flex items-center gap-2">
+              <span className="font-semibold text-gray-600">Window:</span>
+              {viewConfigs[viewMode].dimLabels.map((label, i) => (
+                <label key={i} className="flex items-center gap-1">
+                  <span className="text-gray-700">{label}</span>
                   <input
                     type="number"
-                    value={windowSize1D}
-                    onChange={(e) => setWindowSize1D(Math.max(0, Number(e.target.value)))}
-                    className="w-14 px-1.5 py-0.5 border border-gray-300 rounded text-sm bg-white"
+                    value={windowSize[i] || 0}
+                    onChange={(e) => {
+                      const newWindow = [...windowSize]
+                      newWindow[i] = Math.max(0, Number(e.target.value))
+                      setWindowSize(newWindow)
+                    }}
+                    className="w-12 px-1.5 py-0.5 border border-gray-300 rounded text-sm bg-white"
                     min="0"
                   />
                 </label>
-              </>
-            )}
-
-            {viewMode === '2D Image' && (
-              <>
-                <div className="flex items-center gap-2">
-                  <span className="font-semibold text-gray-600">Shape:</span>
-                  <label className="flex items-center gap-1">
-                    <span className="text-gray-700">Height</span>
-                    <input
-                      type="number"
-                      value={height2D}
-                      onChange={(e) => setHeight2D(Math.max(1, Number(e.target.value)))}
-                      className="w-12 px-1.5 py-0.5 border border-gray-300 rounded text-sm bg-white"
-                      min="1"
-                    />
-                  </label>
-                  <label className="flex items-center gap-1">
-                    <span className="text-gray-700">Width</span>
-                    <input
-                      type="number"
-                      value={width2D}
-                      onChange={(e) => setWidth2D(Math.max(1, Number(e.target.value)))}
-                      className="w-12 px-1.5 py-0.5 border border-gray-300 rounded text-sm bg-white"
-                      min="1"
-                    />
-                  </label>
-                </div>
-                <div className="w-px h-4 bg-gray-300"></div>
-                <div className="flex items-center gap-2">
-                  <span className="font-semibold text-gray-600">Window:</span>
-                  <label className="flex items-center gap-1">
-                    <span className="text-gray-700">Height</span>
-                    <input
-                      type="number"
-                      value={windowHeight2D}
-                      onChange={(e) => setWindowHeight2D(Math.max(0, Number(e.target.value)))}
-                      className="w-12 px-1.5 py-0.5 border border-gray-300 rounded text-sm bg-white"
-                      min="0"
-                    />
-                  </label>
-                  <label className="flex items-center gap-1">
-                    <span className="text-gray-700">Width</span>
-                    <input
-                      type="number"
-                      value={windowWidth2D}
-                      onChange={(e) => setWindowWidth2D(Math.max(0, Number(e.target.value)))}
-                      className="w-12 px-1.5 py-0.5 border border-gray-300 rounded text-sm bg-white"
-                      min="0"
-                    />
-                  </label>
-                </div>
-              </>
-            )}
-
-            {viewMode === '3D Video' && (
-              <>
-                <div className="flex items-center gap-2">
-                  <span className="font-semibold text-gray-600">Shape:</span>
-                  <label className="flex items-center gap-1">
-                    <span className="text-gray-700">Frames</span>
-                    <input
-                      type="number"
-                      value={frames3D}
-                      onChange={(e) => setFrames3D(Math.max(1, Number(e.target.value)))}
-                      className="w-12 px-1.5 py-0.5 border border-gray-300 rounded text-sm bg-white"
-                      min="1"
-                    />
-                  </label>
-                  <label className="flex items-center gap-1">
-                    <span className="text-gray-700">Height</span>
-                    <input
-                      type="number"
-                      value={height3D}
-                      onChange={(e) => setHeight3D(Math.max(1, Number(e.target.value)))}
-                      className="w-12 px-1.5 py-0.5 border border-gray-300 rounded text-sm bg-white"
-                      min="1"
-                    />
-                  </label>
-                  <label className="flex items-center gap-1">
-                    <span className="text-gray-700">Width</span>
-                    <input
-                      type="number"
-                      value={width3D}
-                      onChange={(e) => setWidth3D(Math.max(1, Number(e.target.value)))}
-                      className="w-12 px-1.5 py-0.5 border border-gray-300 rounded text-sm bg-white"
-                      min="1"
-                    />
-                  </label>
-                </div>
-                <div className="w-px h-4 bg-gray-300"></div>
-                <div className="flex items-center gap-2">
-                  <span className="font-semibold text-gray-600">Window:</span>
-                  <label className="flex items-center gap-1">
-                    <span className="text-gray-700">Frames</span>
-                    <input
-                      type="number"
-                      value={windowFrame3D}
-                      onChange={(e) => setWindowFrame3D(Math.max(0, Number(e.target.value)))}
-                      className="w-12 px-1.5 py-0.5 border border-gray-300 rounded text-sm bg-white"
-                      min="0"
-                    />
-                  </label>
-                  <label className="flex items-center gap-1">
-                    <span className="text-gray-700">Height</span>
-                    <input
-                      type="number"
-                      value={windowHeight3D}
-                      onChange={(e) => setWindowHeight3D(Math.max(0, Number(e.target.value)))}
-                      className="w-12 px-1.5 py-0.5 border border-gray-300 rounded text-sm bg-white"
-                      min="0"
-                    />
-                  </label>
-                  <label className="flex items-center gap-1">
-                    <span className="text-gray-700">Width</span>
-                    <input
-                      type="number"
-                      value={windowWidth3D}
-                      onChange={(e) => setWindowWidth3D(Math.max(0, Number(e.target.value)))}
-                      className="w-12 px-1.5 py-0.5 border border-gray-300 rounded text-sm bg-white"
-                      min="0"
-                    />
-                  </label>
-                </div>
-              </>
-            )}
-
+              ))}
+            </div>
             <div className="w-px h-4 bg-gray-300"></div>
-
-            {/* Causal checkboxes - different labels based on view mode */}
-            {viewMode === '1D Sequence' && (
-              <label className="flex items-center gap-1.5 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={causalWidth}
-                  onChange={(e) => setCausalWidth(e.target.checked)}
-                  className="w-3.5 h-3.5 cursor-pointer accent-blue-500"
-                />
-                <span className="font-semibold text-gray-700">Causal</span>
-              </label>
-            )}
-
-            {viewMode === '2D Image' && (
-              <>
-                <label className="flex items-center gap-1.5 cursor-pointer">
+            <div className="flex items-center gap-2">
+              <span className="font-semibold text-gray-600">Causal:</span>
+              {viewConfigs[viewMode].dimLabels.map((label, i) => (
+                <label key={i} className="flex items-center gap-1 cursor-pointer">
+                  <span className="text-gray-700">{label}</span>
                   <input
                     type="checkbox"
-                    checked={causalHeight}
-                    onChange={(e) => setCausalHeight(e.target.checked)}
+                    checked={causal[i] || false}
+                    onChange={(e) => {
+                      const newCausal = [...causal]
+                      newCausal[i] = e.target.checked
+                      setCausal(newCausal)
+                    }}
                     className="w-3.5 h-3.5 cursor-pointer accent-blue-500"
                   />
-                  <span className="font-semibold text-gray-700">Causal Height</span>
                 </label>
-                <label className="flex items-center gap-1.5 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={causalWidth}
-                    onChange={(e) => setCausalWidth(e.target.checked)}
-                    className="w-3.5 h-3.5 cursor-pointer accent-blue-500"
-                  />
-                  <span className="font-semibold text-gray-700">Causal Width</span>
-                </label>
-              </>
-            )}
-
-            {viewMode === '3D Video' && (
-              <>
-                <label className="flex items-center gap-1.5 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={causalFrame}
-                    onChange={(e) => setCausalFrame(e.target.checked)}
-                    className="w-3.5 h-3.5 cursor-pointer accent-blue-500"
-                  />
-                  <span className="font-semibold text-gray-700">Causal Frame</span>
-                </label>
-                <label className="flex items-center gap-1.5 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={causalHeight}
-                    onChange={(e) => setCausalHeight(e.target.checked)}
-                    className="w-3.5 h-3.5 cursor-pointer accent-blue-500"
-                  />
-                  <span className="font-semibold text-gray-700">Causal Height</span>
-                </label>
-                <label className="flex items-center gap-1.5 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={causalWidth}
-                    onChange={(e) => setCausalWidth(e.target.checked)}
-                    className="w-3.5 h-3.5 cursor-pointer accent-blue-500"
-                  />
-                  <span className="font-semibold text-gray-700">Causal Width</span>
-                </label>
-              </>
-            )}
+              ))}
+            </div>
           </div>
 
           {/* Fixed Tokens Title with Buttons */}
@@ -582,6 +379,17 @@ export function SlidingWindowViz() {
                 onSelectToken={setSelectedToken}
                 attendableTokens={attendableTokens}
                 colorScheme={colorScheme}
+                dimensionLabel="Frame"
+              />
+            )}
+            {viewMode === '3D Volume' && (
+              <TokenGrid3D
+                volumeShape={actualVolumeShape}
+                selectedToken={selectedToken}
+                onSelectToken={setSelectedToken}
+                attendableTokens={attendableTokens}
+                colorScheme={colorScheme}
+                dimensionLabel="Depth"
               />
             )}
             <p className="m-0 text-sm text-gray-600 text-center mt-4">Click a token to see its attention pattern</p>
@@ -782,13 +590,15 @@ function TokenGrid3D({
   selectedToken,
   onSelectToken,
   attendableTokens,
-  colorScheme
+  colorScheme,
+  dimensionLabel = 'Frame'
 }: {
   volumeShape: VolumeShape
   selectedToken: number | null
   onSelectToken: (token: number) => void
   attendableTokens: Set<number>
   colorScheme: ColorScheme
+  dimensionLabel?: string
 }) {
   const { frames, height, width } = volumeShape
 
@@ -799,7 +609,7 @@ function TokenGrid3D({
         return (
           <div key={frameIdx}>
             <div className="text-xs font-semibold text-gray-600 mb-0.5 text-center">
-              Frame {frameIdx}
+              {dimensionLabel} {frameIdx}
             </div>
             <TokenGrid
               height={height}
