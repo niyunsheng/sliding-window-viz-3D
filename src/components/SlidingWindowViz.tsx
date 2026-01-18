@@ -198,7 +198,6 @@ export function SlidingWindowViz() {
       `shape=${shape.join(',')}`,
       `window=${windowSize.join(',')}`,
       `causal=${causal.map(c => c ? '1' : '0').join(',')}`,
-      `color=${colorScheme}`,
       selectedToken !== null ? `token=${selectedToken}` : ''
     ].filter(Boolean).join('&')
 
