@@ -140,9 +140,11 @@ export function SlidingWindowViz() {
   const [showShareToast, setShowShareToast] = useState(false)
   const [maskScale, setMaskScale] = useState(1)
   const [showColorDropdown, setShowColorDropdown] = useState(false)
+  const [showModeDropdown, setShowModeDropdown] = useState(false)
   const tokenGridRef = useRef<HTMLDivElement>(null)
   const maskContainerRef = useRef<HTMLDivElement>(null)
   const colorDropdownRef = useRef<HTMLDivElement>(null)
+  const modeDropdownRef = useRef<HTMLDivElement>(null)
 
   const actualVolumeShape: VolumeShape = useMemo(() => {
     const [d0 = 1, d1 = 1, d2 = 1] = shape.length === 1 ? [1, 1, shape[0]] : shape.length === 2 ? [1, ...shape] : shape
@@ -250,6 +252,9 @@ export function SlidingWindowViz() {
       if (colorDropdownRef.current && !colorDropdownRef.current.contains(event.target as Node)) {
         setShowColorDropdown(false)
       }
+      if (modeDropdownRef.current && !modeDropdownRef.current.contains(event.target as Node)) {
+        setShowModeDropdown(false)
+      }
     }
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
@@ -263,16 +268,56 @@ export function SlidingWindowViz() {
     >
       <div className="flex-1 flex overflow-hidden">
         {/* Left: Token Visualization */}
-        <div className="flex flex-col p-8 overflow-hidden" style={{ width: `${leftPanelWidth}%` }}>
+        <div className="flex flex-col p-6 overflow-hidden" style={{ width: `${leftPanelWidth}%` }}>
           {/* Fixed Header Section */}
-          <div className="mb-2 flex items-center justify-between gap-4">
-            <h1 className="m-0 text-2xl font-bold text-gray-900">3D Sliding Window Visualization</h1>
+          <div className="mb-1 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <h1 className="m-0 text-xl font-bold text-gray-900">3D Sliding Window Visualization</h1>
+              <div className="relative" ref={modeDropdownRef}>
+                <button
+                  onClick={() => setShowModeDropdown(!showModeDropdown)}
+                  className="flex items-center gap-1.5 px-2 py-1 border border-gray-300 rounded text-xs bg-white hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <span>{viewConfigs[viewMode].icon}</span>
+                  <span className="font-medium">{viewMode}</span>
+                  <svg className="w-3 h-3 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                {showModeDropdown && (
+                  <div className="absolute top-full mt-1 left-0 bg-white border border-gray-300 rounded shadow-lg z-50 min-w-[140px]">
+                    {(Object.keys(viewConfigs) as ViewMode[]).map((mode) => {
+                      const config = viewConfigs[mode]
+                      return (
+                        <button
+                          key={mode}
+                          onClick={() => {
+                            setViewMode(mode)
+                            setSelectedToken(null)
+                            setShape(viewConfigs[mode].shape)
+                            setWindowSize(viewConfigs[mode].window)
+                            setCausal(viewConfigs[mode].shape.map(() => false))
+                            setShowModeDropdown(false)
+                          }}
+                          className={`flex items-center gap-2 px-3 py-2 hover:bg-gray-100 w-full text-left text-xs ${
+                            viewMode === mode ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700'
+                          }`}
+                        >
+                          <span>{config.icon}</span>
+                          <span>{config.label}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
             <div className="flex items-center gap-2 flex-shrink-0">
               <a
                 href="https://github.com/niyunsheng/sliding-window-viz-3D"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-900 text-white no-underline rounded-md font-medium text-sm transition-all hover:bg-gray-800 hover:-translate-y-0.5 hover:shadow-md"
+                className="inline-flex items-center gap-1.5 px-2 py-1 bg-gray-900 text-white no-underline rounded-md font-medium text-xs transition-all hover:bg-gray-800 hover:-translate-y-0.5 hover:shadow-md"
               >
                 <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true" className="w-4 h-4">
                   <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path>
@@ -283,7 +328,7 @@ export function SlidingWindowViz() {
                 href="https://github.com/niyunsheng/sliding-window-viz-3D/issues"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white text-gray-700 no-underline rounded-md font-medium text-sm border border-gray-300 transition-all hover:bg-gray-50 hover:border-gray-400"
+                className="inline-flex items-center gap-1.5 px-2 py-1 bg-white text-gray-700 no-underline rounded-md font-medium text-xs border border-gray-300 transition-all hover:bg-gray-50 hover:border-gray-400"
               >
                 <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true" className="w-4 h-4">
                   <path d="M8 9.5a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"></path>
@@ -294,39 +339,12 @@ export function SlidingWindowViz() {
             </div>
           </div>
 
-          {/* Fixed View Mode Selector - Radio Button Group */}
-          <div className="flex gap-2">
-            {(Object.keys(viewConfigs) as ViewMode[]).map((mode) => {
-              const config = viewConfigs[mode]
-              return (
-                <button
-                  key={mode}
-                  onClick={() => {
-                    setViewMode(mode)
-                    setSelectedToken(null)
-                    setShape(viewConfigs[mode].shape)
-                    setWindowSize(viewConfigs[mode].window)
-                    setCausal(viewConfigs[mode].shape.map(() => false))
-                  }}
-                  className={`flex-1 px-4 py-2 rounded-md font-medium text-sm transition-all flex items-center justify-center gap-2 ${
-                    viewMode === mode
-                      ? 'bg-blue-500 text-white shadow-md border-2 border-blue-600'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border-2 border-gray-300'
-                  }`}
-                >
-                  <span className="text-lg">{config.icon}</span>
-                  <span>{config.label}</span>
-                </button>
-              )
-            })}
-          </div>
-
           {/* Fixed Mode-specific Controls */}
-          <div className="mt-4 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
-            <div className="flex items-center gap-2">
+          <div className="mt-2 bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs">
+            <div className="flex items-center gap-1.5">
               <span className="font-semibold text-gray-600">Shape:</span>
               {viewConfigs[viewMode].dimLabels.map((label, i) => (
-                <label key={i} className="flex items-center gap-1">
+                <label key={i} className="flex items-center gap-0.5">
                   <span className="text-gray-700">{label}</span>
                   <input
                     type="number"
@@ -336,17 +354,17 @@ export function SlidingWindowViz() {
                       newShape[i] = Math.max(1, Number(e.target.value))
                       setShape(newShape)
                     }}
-                    className="w-12 px-1.5 py-0.5 border border-gray-300 rounded text-sm bg-white"
+                    className="w-11 px-1 py-0.5 border border-gray-300 rounded text-xs bg-white"
                     min="1"
                   />
                 </label>
               ))}
             </div>
-            <div className="w-px h-4 bg-gray-300"></div>
-            <div className="flex items-center gap-2">
+            <div className="w-px h-3 bg-gray-300"></div>
+            <div className="flex items-center gap-1.5">
               <span className="font-semibold text-gray-600">Window:</span>
               {viewConfigs[viewMode].dimLabels.map((label, i) => (
-                <label key={i} className="flex items-center gap-1">
+                <label key={i} className="flex items-center gap-0.5">
                   <span className="text-gray-700">{label}</span>
                   <input
                     type="number"
@@ -356,17 +374,17 @@ export function SlidingWindowViz() {
                       newWindow[i] = Math.max(0, Number(e.target.value))
                       setWindowSize(newWindow)
                     }}
-                    className="w-12 px-1.5 py-0.5 border border-gray-300 rounded text-sm bg-white"
+                    className="w-11 px-1 py-0.5 border border-gray-300 rounded text-xs bg-white"
                     min="0"
                   />
                 </label>
               ))}
             </div>
-            <div className="w-px h-4 bg-gray-300"></div>
-            <div className="flex items-center gap-2">
+            <div className="w-px h-3 bg-gray-300"></div>
+            <div className="flex items-center gap-1.5">
               <span className="font-semibold text-gray-600">Causal:</span>
               {viewConfigs[viewMode].dimLabels.map((label, i) => (
-                <label key={i} className="flex items-center gap-1 cursor-pointer">
+                <label key={i} className="flex items-center gap-0.5 cursor-pointer">
                   <span className="text-gray-700">{label}</span>
                   <input
                     type="checkbox"
@@ -376,7 +394,7 @@ export function SlidingWindowViz() {
                       newCausal[i] = e.target.checked
                       setCausal(newCausal)
                     }}
-                    className="w-3.5 h-3.5 cursor-pointer accent-blue-500"
+                    className="w-3 h-3 cursor-pointer accent-blue-500"
                   />
                 </label>
               ))}
@@ -384,12 +402,12 @@ export function SlidingWindowViz() {
           </div>
 
           {/* Fixed Tokens Title with Buttons */}
-          <div className="mt-4 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <h2 className="m-0 text-xl font-semibold text-gray-900">Tokens ({viewMode})</h2>
+          <div className="mt-2 flex items-center justify-between">
+            <div className="flex items-center gap-1.5">
+              <h2 className="m-0 text-base font-semibold text-gray-900">Tokens ({viewMode})</h2>
               <button
                 onClick={handleShare}
-                className={`px-3 py-1.5 rounded text-sm font-medium transition-all flex items-center gap-1.5 ${
+                className={`px-2 py-1 rounded text-xs font-medium transition-all flex items-center gap-1 ${
                   showShareToast
                     ? 'bg-green-600 text-white'
                     : 'bg-blue-600 text-white hover:bg-blue-700'
@@ -397,33 +415,33 @@ export function SlidingWindowViz() {
               >
                 {showShareToast ? (
                   <>
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                     </svg>
                     <span>Link Copied!</span>
                   </>
                 ) : (
                   <>
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
                     </svg>
-                    <span>Share This Configuration</span>
+                    <span>Share</span>
                   </>
                 )}
               </button>
               <button
                 onClick={() => setSelectedToken(null)}
-                className={`px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-100 hover:border-gray-400 transition-colors ${
+                className={`px-2 py-1 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-100 hover:border-gray-400 transition-colors ${
                   selectedToken === null ? 'invisible' : ''
                 }`}
               >
-                Clear Selection
+                Clear
               </button>
             </div>
           </div>
 
           {/* Scrollable Token Grid Area */}
-          <div className="flex-1 overflow-auto mt-4 min-h-0" ref={tokenGridRef}>
+          <div className="flex-1 overflow-auto mt-2 min-h-0" ref={tokenGridRef}>
             {viewMode === '1D Sequence' && (
               <TokenGrid1D
                 width={actualVolumeShape.width}
@@ -463,13 +481,13 @@ export function SlidingWindowViz() {
                 dimensionLabel="Depth"
               />
             )}
-            <p className="m-0 text-sm text-gray-600 text-center mt-4">Click a token to see its attention pattern</p>
+            <p className="m-0 text-xs text-gray-600 text-center mt-2">Click a token to see its attention pattern</p>
           </div>
 
           {/* Fixed Bottom Section */}
-          <div className="pt-4">
-            <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3">
-              <p className="text-sm text-gray-700 m-0 leading-relaxed">
+          <div className="pt-2">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
+              <p className="text-xs text-gray-700 m-0 leading-relaxed">
                 <span className="font-semibold text-blue-900">Why this tool?</span> While 1D sliding window is intuitive, 2D/3D cases are tricky—spatially adjacent tokens may be far apart in memory. This visualization clarifies the mapping.
               </p>
             </div>
@@ -483,7 +501,7 @@ export function SlidingWindowViz() {
         />
 
         {/* Right: Attention Mask */}
-        <div className="flex flex-col gap-4 pt-8 px-8 pb-4 overflow-hidden" style={{ width: `${100 - leftPanelWidth}%` }}>
+        <div className="flex flex-col gap-4 pt-6 px-6 pb-4 overflow-hidden" style={{ width: `${100 - leftPanelWidth}%` }}>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
             <div className="flex items-center gap-2">
               <h2 className="m-0 text-lg font-semibold text-gray-900 whitespace-nowrap">Attention Mask</h2>
