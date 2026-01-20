@@ -484,10 +484,10 @@ export function SlidingWindowViz() {
 
         {/* Right: Attention Mask */}
         <div className="flex flex-col gap-4 pt-8 px-8 pb-4 overflow-hidden" style={{ width: `${100 - leftPanelWidth}%` }}>
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-            <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+            <div className="flex items-center gap-2">
               <h2 className="m-0 text-lg font-semibold text-gray-900 whitespace-nowrap">Attention Mask</h2>
-              <div className="flex items-center gap-2 text-xs">
+              <div className="flex items-center gap-1.5 text-xs">
                 <div className="flex items-center gap-1">
                   <div className={`w-3.5 h-3.5 rounded border ${colorSchemes[colorScheme].selectedBorder} ${colorSchemes[colorScheme].selected}`}></div>
                   <span className="text-gray-600">Selected</span>
@@ -502,7 +502,7 @@ export function SlidingWindowViz() {
                 </div>
               </div>
             </div>
-            <div className="flex items-center gap-2 ml-auto">
+            <div className="flex items-center gap-1.5 ml-auto">
               <div className="relative" ref={colorDropdownRef}>
                 <button
                   onClick={() => setShowColorDropdown(!showColorDropdown)}
@@ -616,7 +616,7 @@ function TokenGrid({
 
   return (
     <div
-      className="grid gap-1 p-4 bg-gray-50 border border-gray-200 rounded-lg mx-auto"
+      className="grid gap-1 p-2 bg-gray-50 border border-gray-200 rounded-lg mx-auto"
       style={{
         gridTemplateColumns: `repeat(${width}, 40px)`,
         gridTemplateRows: `repeat(${height}, 40px)`
